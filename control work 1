@@ -1,0 +1,78 @@
+import sqlite3
+import requests
+from bs4 import BeautifulSoup
+
+class Database:
+    def __init__(self):
+        self.conn = sqlite3.connect("data.db")
+        self.cursor = self.conn.cursor()
+        self.cursor.execute("CREATE TABLE IF NOT EXISTS sites (url TEXT UNIQUE, freq INTEGER)")
+        self.conn.commit()
+
+    def add_site(self, url):
+        self.cursor.execute("INSERT OR IGNORE INTO sites (url, freq) VALUES (?, 0)", (url,))
+        self.conn.commit()
+
+    def update_freq(self, url, freq):
+        self.cursor.execute("UPDATE sites SET freq = ? WHERE url = ?", (freq, url))
+        self.conn.commit()
+
+    def get_sites(self):
+        self.cursor.execute("SELECT url FROM sites")
+        return [row[0] for row in self.cursor.fetchall()]
+
+    def clear(self):
+        self.cursor.execute("DELETE FROM sites")
+        self.conn.commit()
+
+    def close(self):
+        self.conn.close()
+
+class Scraper:
+    def fetch(self, url):
+        try:
+            return requests.get(url).text
+        except:
+            return ""
+
+    def count_word(self, content, word):
+        words = content.lower().split()
+        return words.count(word.lower())
+
+class App:
+    def __init__(self):
+        self.db = Database()
+        self.scraper = Scraper()
+
+    def menu(self):
+        print("1. Add Site")
+        print("2. Search Word")
+        print("3. Clear Sites")
+        print("4. Show Sites")
+        print("5. Exit")
+
+    def run(self):
+        while True:
+            self.menu()
+            choice = input("Choose: ")
+            if choice == "1":
+                url = input("Enter site URL: ")
+                self.db.add_site(url)
+            elif choice == "2":
+                word = input("Enter word: ")
+                for site in self.db.get_sites():
+                    content = self.scraper.fetch(site)
+                    freq = self.scraper.count_word(content, word)
+                    self.db.update_freq(site, freq)
+                    print(f"{site}: {freq}")
+            elif choice == "3":
+                self.db.clear()
+            elif choice == "4":
+                for site in self.db.get_sites():
+                    print(site)
+            elif choice == "5":
+                self.db.close()
+                break
+
+if __name__ == "__main__":
+    App().run()
